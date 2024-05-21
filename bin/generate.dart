@@ -110,7 +110,7 @@ String _toLowerCamelCase(String text) {
 void updatePubspecFile(Directory sourceDir) {
   final pubspecFile = File('pubspec.yaml');
   final lines = pubspecFile.readAsLinesSync();
-  final assetIndex = lines.indexWhere((line) => line.trim() == 'assets:');
+  int assetIndex = lines.indexWhere((line) => line.trim() == 'assets:');
   if (assetIndex == -1) {
     print('Error: "assets:" section not found in pubspec.yaml');
     return;
@@ -121,9 +121,12 @@ void updatePubspecFile(Directory sourceDir) {
   lines.removeWhere(
       (line) => line.trim().startsWith('- assets/$targetParentFolderName'));
 
+  // Update the assetIndex
+  assetIndex = lines.indexWhere((line) => line.trim() == 'assets:');
+
   // Add default asset path if it doesn't exist
   if (!lines.contains('    - assets/')) {
-    lines.insert(assetIndex, '    - assets/');
+    lines.insert(assetIndex + 1, '    - assets/');
   }
 
   // Add new asset paths
@@ -132,7 +135,7 @@ void updatePubspecFile(Directory sourceDir) {
       final relativePath =
           entity.path.substring(sourceDir.path.length).replaceAll('\\', '/');
       lines.insert(
-          assetIndex + 1, '    - assets/$targetParentFolderName$relativePath/');
+          assetIndex + 2, '    - assets/$targetParentFolderName$relativePath/');
     }
   });
 
