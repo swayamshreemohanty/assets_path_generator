@@ -1,0 +1,7 @@
+name: assets_path_generator
+description: A standalone script to generate a Dart class for image assets.
+environment:
+  sdk: ">=3.3.4 <4.0.0"
+dependencies:
+  args: ^2.5.0
+  path: ^1.9.0
