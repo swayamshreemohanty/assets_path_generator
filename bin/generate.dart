@@ -4,17 +4,18 @@ import 'package:args/args.dart';
 import 'package:path/path.dart' as path;
 
 void main(List<String> args) {
-  final argResults = parseArguments(args);
-  final sourceDir = Directory(argResults['source-dir']);
-  final destinationFile = File(argResults['output-file']);
-  final className = argResults['class-name'];
-
-  validateSourceDirectory(sourceDir);
-
-  final buffer = generateDartCode(sourceDir, className);
-  destinationFile.writeAsStringSync(buffer.toString());
-
-  updatePubspecFile(sourceDir);
+  try {
+    final argResults = parseArguments(args);
+    final sourceDir = Directory(argResults['source-dir']);
+    final destinationFile = File(argResults['output-file']);
+    final className = argResults['class-name'];
+    validateSourceDirectory(sourceDir);
+    final buffer = generateDartCode(sourceDir, className);
+    destinationFile.writeAsStringSync(buffer.toString());
+    updatePubspecFile(sourceDir);
+  } catch (e) {
+    print("Error: $e");
+  }
 }
 
 ArgResults parseArguments(List<String> args) {
@@ -51,8 +52,13 @@ void validateSourceDirectory(Directory sourceDir) {
 StringBuffer generateDartCode(Directory sourceDir, String className) {
   final buffer = StringBuffer()..writeln('abstract class $className {');
   String lastDirName = '';
-
   sourceDir.listSync(recursive: true, followLinks: false).forEach((entity) {
+    // Skip hidden files and directories
+    if (entity.path.split('/').last.startsWith('.')) {
+      return;
+    }
+
+    // Process directories and files
     if (entity is Directory) {
       lastDirName = processDirectory(entity, sourceDir, buffer, lastDirName);
     } else if (entity is File) {
@@ -64,8 +70,12 @@ StringBuffer generateDartCode(Directory sourceDir, String className) {
   return buffer;
 }
 
-String processDirectory(Directory entity, Directory sourceDir,
-    StringBuffer buffer, String lastDirName) {
+String processDirectory(
+  Directory entity,
+  Directory sourceDir,
+  StringBuffer buffer,
+  String lastDirName,
+) {
   final dirPath = getRelativePath(entity, sourceDir);
   final dirName = dirPath.split('/').last;
   final camelCaseDirName = _toLowerCamelCase(dirName);
@@ -76,7 +86,11 @@ String processDirectory(Directory entity, Directory sourceDir,
 }
 
 String processFile(
-    File entity, Directory sourceDir, StringBuffer buffer, String lastDirName) {
+  File entity,
+  Directory sourceDir,
+  StringBuffer buffer,
+  String lastDirName,
+) {
   final filePath = getRelativePath(entity, sourceDir);
   final fileNameWithExtension = filePath.split('/').last;
   final fileName = fileNameWithExtension.split('.').first;
@@ -88,7 +102,8 @@ String processFile(
   final camelCaseDirName = _toLowerCamelCase(dirName);
   final lowerCamelCaseFileName = _toLowerCamelCase(fileName);
   buffer.writeln(
-      '  static const String $lowerCamelCaseFileName = "\$_${camelCaseDirName}Path/$fileName.$fileExtension";');
+    '  static const String $lowerCamelCaseFileName = "\$_${camelCaseDirName}Path/$fileName.$fileExtension";',
+  );
   return dirName;
 }
 
