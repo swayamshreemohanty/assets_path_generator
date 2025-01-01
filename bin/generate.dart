@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:args/args.dart';
 import 'package:path/path.dart' as path;
 
@@ -15,7 +16,7 @@ void main(List<String> args) {
 
     // Generate Dart code from the source directory
     final buffer = generateDartCode(sourceDir, className);
-    
+
     // Write the generated Dart code to the output file
     destinationFile.writeAsStringSync(buffer.toString());
 
@@ -29,9 +30,18 @@ void main(List<String> args) {
 
 ArgResults parseArguments(List<String> args) {
   final parser = ArgParser()
-    ..addOption('source-dir', abbr: 'S', help: 'Source directory that contains the image assets.', callback: (String? value) => validateNotEmpty(value, 'source-dir'))
-    ..addOption('output-file', abbr: 'O', help: 'Output file where the generated Dart code will be saved.', callback: (String? value) => validateNotEmpty(value, 'output-file'))
-    ..addOption('class-name', abbr: 'C', help: 'Class name for the generated Dart code.', callback: (String? value) => validateNotEmpty(value, 'class-name'));
+    ..addOption('source-dir',
+        abbr: 'S',
+        help: 'Source directory that contains the image assets.',
+        callback: (String? value) => validateNotEmpty(value, 'source-dir'))
+    ..addOption('output-file',
+        abbr: 'O',
+        help: 'Output file where the generated Dart code will be saved.',
+        callback: (String? value) => validateNotEmpty(value, 'output-file'))
+    ..addOption('class-name',
+        abbr: 'C',
+        help: 'Class name for the generated Dart code.',
+        callback: (String? value) => validateNotEmpty(value, 'class-name'));
 
   // Parse and return the command line arguments
   return parser.parse(args);
@@ -53,12 +63,15 @@ void validateSourceDirectory(Directory sourceDir) {
 }
 
 StringBuffer generateDartCode(Directory sourceDir, String className) {
-  final buffer = StringBuffer()..writeln('abstract class $className {');
+  final buffer = StringBuffer()
+    ..writeln('// ignore_for_file: public_member_api_docs')
+    ..writeln('abstract class $className {');
   String lastDirName = '';
 
   // Iterate through the source directory and process each entity
   sourceDir.listSync(recursive: true, followLinks: false).forEach((entity) {
-    if (entity.path.split('/').last.startsWith('.')) return; // Skip hidden files and directories
+    if (entity.path.split('/').last.startsWith('.'))
+      return; // Skip hidden files and directories
 
     if (entity is Directory) {
       lastDirName = processDirectory(entity, sourceDir, buffer, lastDirName);
@@ -71,19 +84,22 @@ StringBuffer generateDartCode(Directory sourceDir, String className) {
   return buffer;
 }
 
-String processDirectory(Directory entity, Directory sourceDir, StringBuffer buffer, String lastDirName) {
+String processDirectory(Directory entity, Directory sourceDir,
+    StringBuffer buffer, String lastDirName) {
   final dirPath = getRelativePath(entity, sourceDir);
   final dirName = dirPath.split('/').last;
   final camelCaseDirName = _toLowerCamelCase(dirName);
 
   // Write directory path as a constant
   buffer.writeln('\n  // $dirName');
-  buffer.writeln('  static const String _${camelCaseDirName}Path = "${sourceDir.path.replaceAll('\\', '/')}/$dirPath";');
+  buffer.writeln(
+      '  static const String _${camelCaseDirName}Path = "${sourceDir.path.replaceAll('\\', '/')}/$dirPath";');
 
   return dirName;
 }
 
-String processFile(File entity, Directory sourceDir, StringBuffer buffer, String lastDirName) {
+String processFile(
+    File entity, Directory sourceDir, StringBuffer buffer, String lastDirName) {
   final filePath = getRelativePath(entity, sourceDir);
   final fileNameWithExtension = filePath.split('/').last;
   final fileName = fileNameWithExtension.split('.').first;
@@ -98,14 +114,17 @@ String processFile(File entity, Directory sourceDir, StringBuffer buffer, String
   final camelCaseDirName = _toLowerCamelCase(dirName);
   final lowerCamelCaseFileName = _toLowerCamelCase(fileName);
 
-  buffer.writeln('  static const String $lowerCamelCaseFileName = "\$_${camelCaseDirName}Path/$fileName.$fileExtension";');
+  buffer.writeln(
+      '  static const String $lowerCamelCaseFileName = "\$_${camelCaseDirName}Path/$fileName.$fileExtension";');
 
   return dirName;
 }
 
 String getRelativePath(FileSystemEntity entity, Directory sourceDir) {
   // Get the relative path of the entity from the source directory
-  return entity.path.replaceAll('\\', '/').replaceFirst(sourceDir.path.replaceAll('\\', '/') + '/', '');
+  return entity.path
+      .replaceAll('\\', '/')
+      .replaceFirst(sourceDir.path.replaceAll('\\', '/') + '/', '');
 }
 
 String _toLowerCamelCase(String text) {
@@ -141,31 +160,54 @@ void updatePubspecFile(Directory sourceDir) {
 
   print('Found "assets:" section in pubspec.yaml.');
 
-  final targetParentFolderName = path.basename(sourceDir.path);
-  // Remove existing asset paths related to the source directory
-  lines.removeWhere((line) => line.trim().startsWith('- assets/$targetParentFolderName') || line.trim() == '    - assets/');
-
-  // Ensure there is an "assets/" entry
-  if (!lines.contains('    - assets/')) {
-    lines.insert(assetIndex + 1, '    - assets/');
-  }
+  // Track existing paths to avoid duplication
+  final existingPaths = lines
+      .skip(assetIndex + 1)
+      .takeWhile((line) => line.trim().startsWith('- assets/'))
+      .map((line) => line.trim())
+      .toSet();
 
   final newPaths = <String>{};
+
   // Collect new asset paths
   sourceDir.listSync(recursive: true, followLinks: false).forEach((entity) {
     if (entity is Directory) {
-      final relativePath = path.relative(entity.path, from: Directory.current.path).replaceAll('\\', '/');
-      newPaths.add(relativePath + '/');
+      final relativePath = path
+          .relative(entity.path, from: Directory.current.path)
+          .replaceAll('\\', '/');
+      final newPath = '    - $relativePath/';
+      // Add the new path only if it doesn't already exist in existingPaths
+      if (!existingPaths.contains(newPath)) {
+        newPaths.add(newPath);
+      }
     }
   });
 
   // Sort and add new asset paths to pubspec.yaml
   final sortedPaths = newPaths.toList()..sort();
   for (final newPath in sortedPaths) {
-    lines.insert(assetIndex + 2, '    - $newPath');
+    // Insert the new path only if it doesn't already exist
+    if (!existingPaths.contains(newPath)) {
+      lines.insert(assetIndex + 1, newPath);
+      existingPaths.add(newPath); // Add the new path to existingPaths
+    }
+  }
+
+  // Remove duplicate paths within the assets section
+  final uniqueLines = <String>[];
+  final seenPaths = <String>{};
+  for (var i = 0; i < lines.length; i++) {
+    final line = lines[i];
+    if (i > assetIndex && line.trim().startsWith('- assets/')) {
+      if (seenPaths.add(line.trim())) {
+        uniqueLines.add(line);
+      }
+    } else {
+      uniqueLines.add(line);
+    }
   }
 
   // Write the updated pubspec.yaml file
-  pubspecFile.writeAsStringSync(lines.join('\n'));
+  pubspecFile.writeAsStringSync(uniqueLines.join('\n'));
   print('pubspec.yaml updated successfully!');
 }
