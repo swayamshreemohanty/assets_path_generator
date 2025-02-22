@@ -138,6 +138,7 @@ String processFile(
 
   return dirName;
 }
+
 String getRelativePath(FileSystemEntity entity, Directory sourceDir) {
   // Get the relative path of the entity from the source directory
   return entity.path
