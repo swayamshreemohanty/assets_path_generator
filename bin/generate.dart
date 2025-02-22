@@ -178,12 +178,15 @@ void updatePubspecFile(Directory sourceDir) {
 
   print('Found "assets:" section in pubspec.yaml.');
 
-  // Track existing paths to avoid duplication
-  final existingPaths = lines
-      .skip(assetIndex + 1)
-      .takeWhile((line) => line.trim().startsWith('- assets/'))
-      .map((line) => line.trim())
-      .toSet();
+  // Remove all existing paths under the "assets:" section
+  int nextSectionIndex = lines.length;
+  for (int i = assetIndex + 1; i < lines.length; i++) {
+    if (!lines[i].trim().startsWith('- assets/')) {
+      nextSectionIndex = i;
+      break;
+    }
+  }
+  lines.removeRange(assetIndex + 1, nextSectionIndex);
 
   final newPaths = <String>{};
 
@@ -194,38 +197,23 @@ void updatePubspecFile(Directory sourceDir) {
           .relative(entity.path, from: Directory.current.path)
           .replaceAll('\\', '/');
       final newPath = '    - $relativePath/';
-      // Add the new path only if it doesn't already exist in existingPaths
-      if (!existingPaths.contains(newPath)) {
-        newPaths.add(newPath);
-      }
+      newPaths.add(newPath);
+    } else if (entity is File) {
+      final relativePath = path
+          .relative(entity.parent.path, from: Directory.current.path)
+          .replaceAll('\\', '/');
+      final newPath = '    - $relativePath/';
+      newPaths.add(newPath);
     }
   });
 
   // Sort and add new asset paths to pubspec.yaml
   final sortedPaths = newPaths.toList()..sort();
   for (final newPath in sortedPaths) {
-    // Insert the new path only if it doesn't already exist
-    if (!existingPaths.contains(newPath)) {
-      lines.insert(assetIndex + 1, newPath);
-      existingPaths.add(newPath); // Add the new path to existingPaths
-    }
-  }
-
-  // Remove duplicate paths within the assets section
-  final uniqueLines = <String>[];
-  final seenPaths = <String>{};
-  for (var i = 0; i < lines.length; i++) {
-    final line = lines[i];
-    if (i > assetIndex && line.trim().startsWith('- assets/')) {
-      if (seenPaths.add(line.trim())) {
-        uniqueLines.add(line);
-      }
-    } else {
-      uniqueLines.add(line);
-    }
+    lines.insert(assetIndex + 1, newPath);
   }
 
   // Write the updated pubspec.yaml file
-  pubspecFile.writeAsStringSync(uniqueLines.join('\n'));
+  pubspecFile.writeAsStringSync(lines.join('\n'));
   print('pubspec.yaml updated successfully!');
 }
