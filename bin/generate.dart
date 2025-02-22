@@ -124,12 +124,13 @@ String processFile(
         '  static const String _${camelCaseDirName}Path = "${sourceDir.path.replaceAll('\\', '/')}/$dirName";');
   } else if (dirName.isEmpty) {
     // Handle files directly under the source directory
-    buffer.writeln('\n  // Root');
+    final sourceDirName = sourceDir.path.split('/').last;
+    buffer.writeln('\n  // $sourceDirName');
     buffer.writeln(
-        '  static const String _rootPath = "${sourceDir.path.replaceAll('\\', '/')}";');
+        '  static const String _${_toLowerCamelCase(sourceDirName)}Path = "${sourceDir.path.replaceAll('\\', '/')}";');
   }
 
-  final camelCaseDirName = dirName.isNotEmpty ? _toLowerCamelCase(dirName) : 'root';
+  final camelCaseDirName = dirName.isNotEmpty ? _toLowerCamelCase(dirName) : _toLowerCamelCase(sourceDir.path.split('/').last);
   final lowerCamelCaseFileName = _toLowerCamelCase(fileName);
 
   buffer.writeln(
@@ -137,7 +138,6 @@ String processFile(
 
   return dirName;
 }
-
 String getRelativePath(FileSystemEntity entity, Directory sourceDir) {
   // Get the relative path of the entity from the source directory
   return entity.path
