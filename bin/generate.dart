@@ -90,12 +90,19 @@ String processDirectory(Directory entity, Directory sourceDir,
   final dirName = dirPath.split('/').last;
   final camelCaseDirName = _toLowerCamelCase(dirName);
 
-  // Write directory path as a constant
-  buffer.writeln('\n  // $dirName');
-  buffer.writeln(
-      '  static const String _${camelCaseDirName}Path = "${sourceDir.path.replaceAll('\\', '/')}/$dirPath";');
+  // Check if the directory contains any files
+  final hasFiles = entity
+      .listSync(recursive: false, followLinks: false)
+      .any((e) => e is File);
 
-  return dirName;
+  if (hasFiles) {
+    // Write directory path as a constant
+    buffer.writeln('\n  // $dirName');
+    buffer.writeln(
+        '  static const String _${camelCaseDirName}Path = "${sourceDir.path.replaceAll('\\', '/')}/$dirPath";');
+  }
+
+  return hasFiles ? dirName : lastDirName;
 }
 
 String processFile(
@@ -104,14 +111,25 @@ String processFile(
   final fileNameWithExtension = filePath.split('/').last;
   final fileName = fileNameWithExtension.split('.').first;
   final fileExtension = fileNameWithExtension.split('.').last;
-  final dirName = filePath.split('/').reversed.toList()[1];
+  final pathSegments = filePath.split('/');
 
-  // Write file path as a constant
-  if (dirName != lastDirName) {
+  // Handle files directly under the source directory
+  final dirName = pathSegments.length > 1 ? pathSegments[pathSegments.length - 2] : '';
+
+  // Write directory path as a constant if it's different from the last directory
+  if (dirName != lastDirName && dirName.isNotEmpty) {
+    final camelCaseDirName = _toLowerCamelCase(dirName);
     buffer.writeln('\n  // $dirName');
+    buffer.writeln(
+        '  static const String _${camelCaseDirName}Path = "${sourceDir.path.replaceAll('\\', '/')}/$dirName";');
+  } else if (dirName.isEmpty) {
+    // Handle files directly under the source directory
+    buffer.writeln('\n  // Root');
+    buffer.writeln(
+        '  static const String _rootPath = "${sourceDir.path.replaceAll('\\', '/')}";');
   }
 
-  final camelCaseDirName = _toLowerCamelCase(dirName);
+  final camelCaseDirName = dirName.isNotEmpty ? _toLowerCamelCase(dirName) : 'root';
   final lowerCamelCaseFileName = _toLowerCamelCase(fileName);
 
   buffer.writeln(
