@@ -19,8 +19,6 @@ ArgResults parseArguments(List<String> args) {
   return parser.parse(args);
 }
 
-
-
 void validateNotEmpty(String? value, String key) {
   // Ensure that the provided value is not null or empty
   if (value == null || value.isEmpty) {
