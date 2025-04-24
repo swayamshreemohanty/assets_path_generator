@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import 'package:yaml/yaml.dart';
+import 'package:yaml_edit/yaml_edit.dart';
 
 void updatePubspecFile(Directory sourceDir) {
   final pubspecFile = File('pubspec.yaml');
@@ -12,53 +14,49 @@ void updatePubspecFile(Directory sourceDir) {
   }
 
   print('Reading pubspec.yaml...');
-  final lines = pubspecFile.readAsLinesSync();
+  final pubspecContent = pubspecFile.readAsStringSync();
+  final yamlEditor = YamlEditor(pubspecContent);
 
-  // Find the index of the "assets:" section
-  int assetIndex = lines.indexWhere((line) => line.trim() == 'assets:');
-  if (assetIndex == -1) {
-    print('Error: "assets:" section not found in pubspec.yaml');
+  // Parse the YAML content
+  final yamlMap = loadYaml(pubspecContent) as Map;
+
+  // Check if the "flutter" and "assets" sections exist
+  if (!yamlMap.containsKey('flutter') ||
+      !(yamlMap['flutter'] as Map).containsKey('assets')) {
+    print('Error: "flutter" or "assets" section not found in pubspec.yaml');
     return;
   }
 
-  print('Found "assets:" section in pubspec.yaml.');
+  final assetsList = (yamlMap['flutter']['assets'] as List).cast<String>();
 
-  // Remove all existing paths under the "assets:" section
-  int nextSectionIndex = lines.length;
-  for (int i = assetIndex + 1; i < lines.length; i++) {
-    if (!lines[i].trim().startsWith('- assets/')) {
-      nextSectionIndex = i;
-      break;
-    }
-  }
-  lines.removeRange(assetIndex + 1, nextSectionIndex);
+  // Get the relative path of the source directory
+  final sourcePath = path
+      .relative(sourceDir.path, from: Directory.current.path)
+      .replaceAll('\\', '/');
 
+  // Filter out existing paths under the source directory
+  final updatedAssets =
+      assetsList.where((asset) => !asset.startsWith('$sourcePath/')).toList();
+
+  // Collect new asset paths from the source directory
   final newPaths = <String>{};
-
-  // Collect new asset paths
   sourceDir.listSync(recursive: true, followLinks: false).forEach((entity) {
     if (entity is Directory) {
       final relativePath = path
           .relative(entity.path, from: Directory.current.path)
           .replaceAll('\\', '/');
-      final newPath = '    - $relativePath/';
-      newPaths.add(newPath);
-    } else if (entity is File) {
-      final relativePath = path
-          .relative(entity.parent.path, from: Directory.current.path)
-          .replaceAll('\\', '/');
-      final newPath = '    - $relativePath/';
-      newPaths.add(newPath);
+      newPaths.add('$relativePath/');
     }
   });
 
-  // Sort and add new asset paths to pubspec.yaml
+  // Sort and add new asset paths under the source directory
   final sortedPaths = newPaths.toList()..sort();
-  for (final newPath in sortedPaths) {
-    lines.insert(assetIndex + 1, newPath);
-  }
+  updatedAssets.addAll(sortedPaths);
+
+  // Update the "assets" section in the YAML
+  yamlEditor.update(['flutter', 'assets'], updatedAssets);
 
   // Write the updated pubspec.yaml file
-  pubspecFile.writeAsStringSync(lines.join('\n'));
+  pubspecFile.writeAsStringSync(yamlEditor.toString());
   print('pubspec.yaml updated successfully!');
 }
